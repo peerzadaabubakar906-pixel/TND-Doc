@@ -157,6 +157,7 @@
   </div>
 
   <button class="download-btn" id="downloadBtn" disabled>⬇ Download Doc</button>
+  <button class="download-btn" id="downloadTranscriptsBtn" disabled>⬇ Download Transcripts</button>
 </div>
 
 <script>
@@ -205,9 +206,10 @@ const listSection = document.getElementById('listSection');
 const listItemsEl = document.getElementById('listItems');
 const listCountEl = document.getElementById('listCount');
 const downloadBtn = document.getElementById('downloadBtn');
+const downloadTranscriptsBtn = document.getElementById('downloadTranscriptsBtn');
 
-let currentResult = null; // { title, description } of the most recently generated (not yet added) result
-let addedItems = [];      // all items the user has clicked "Add" on
+let currentResult = null; // { title, description, transcript } of the most recently generated (not yet added) result
+let addedItems = [];      // all items the user has clicked "Add" on ({ title, description, transcript })
 
 function showError(msg) {
   errorBox.textContent = msg;
@@ -230,9 +232,9 @@ function copyText(text, btn) {
   setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1200);
 }
 
-function renderResult(title, description) {
+function renderResult(title, description, transcript) {
   results.innerHTML = '';
-  currentResult = { title, description };
+  currentResult = { title, description, transcript };
 
   const titleCard = document.createElement('div');
   titleCard.className = 'result-card';
@@ -265,7 +267,7 @@ function renderResult(title, description) {
   addRow.innerHTML = `<button class="add-btn">+ Add to List</button>`;
   const addBtn = addRow.querySelector('.add-btn');
   addBtn.addEventListener('click', () => {
-    addItemToList(currentResult.title, currentResult.description);
+    addItemToList(currentResult.title, currentResult.description, currentResult.transcript);
     addBtn.textContent = 'Added ✓';
     addBtn.classList.add('added');
     addBtn.disabled = true;
@@ -277,6 +279,7 @@ function renderList() {
   listCountEl.textContent = addedItems.length;
   listSection.style.display = addedItems.length ? 'block' : 'none';
   downloadBtn.disabled = addedItems.length === 0;
+  downloadTranscriptsBtn.disabled = addedItems.length === 0;
 
   listItemsEl.innerHTML = '';
   addedItems.forEach((item, index) => {
@@ -299,8 +302,8 @@ function renderList() {
   });
 }
 
-function addItemToList(title, description) {
-  addedItems.push({ title, description });
+function addItemToList(title, description, transcript) {
+  addedItems.push({ title, description, transcript: transcript || '' });
   renderList();
 }
 
@@ -369,6 +372,38 @@ function downloadDoc() {
 
 downloadBtn.addEventListener('click', downloadDoc);
 
+function downloadTranscriptsDoc() {
+  if (addedItems.length === 0) return;
+
+  let body = '';
+  addedItems.forEach((item, i) => {
+    body += `
+      <p style="font-family:Calibri,Arial,sans-serif;font-size:12pt;margin:0 0 2px 0;"><b>Transcript ${i + 1}:</b></p>
+      <p style="font-family:Calibri,Arial,sans-serif;font-size:12pt;margin:0 0 20px 0;white-space:pre-wrap;">${escapeHtml(item.transcript).replace(/\n/g, '<br>')}</p>
+      <hr style="border:none;border-top:1px solid #ccc;margin:0 0 20px 0;">
+    `;
+  });
+
+  const html = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="utf-8"><title>Transcripts</title></head>
+    <body>${body}</body>
+    </html>
+  `;
+
+  const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'transcripts.doc';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+downloadTranscriptsBtn.addEventListener('click', downloadTranscriptsDoc);
+
 
 generateBtn.addEventListener('click', async () => {
   hideError();
@@ -390,10 +425,11 @@ generateBtn.addEventListener('click', async () => {
       body: JSON.stringify({ instructions: INSTRUCTIONS, transcript })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Server error');
-    renderResult(data.title, data.description);
+    if (!res.ok) throw new Error(data.details || data.error || 'Server error');
+    renderResult(data.title, data.description, transcript);
   } catch (e) {
-    showError('Something went wrong. Please try again.');
+    console.error('Generate failed:', e);
+    showError(e.message || 'Something went wrong. Please try again.');
   } finally {
     generateBtn.disabled = false;
     btnText.textContent = '✦ Title & Description';
