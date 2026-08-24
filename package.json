@@ -1,0 +1,9 @@
+{
+  "name": "transcript-title-generator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Paste a transcript, get an AI-generated title and description using OpenAI (ChatGPT).",
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}
