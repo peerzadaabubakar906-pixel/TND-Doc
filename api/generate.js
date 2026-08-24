@@ -49,8 +49,33 @@ export default async function handler(req, res) {
     }
 
     const data = await geminiRes.json();
-    const textOut = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    const parsed = JSON.parse(textOut);
+    const candidate = data.candidates?.[0];
+
+    if (!candidate) {
+      return res.status(502).json({
+        error: "Gemini ne koi response nahi diya (shayad safety filter ki wajah se block hua)",
+        details: JSON.stringify(data),
+      });
+    }
+
+    if (candidate.finishReason && candidate.finishReason !== "STOP") {
+      return res.status(502).json({
+        error: `Gemini response incomplete (finishReason: ${candidate.finishReason})`,
+        details: JSON.stringify(data),
+      });
+    }
+
+    const textOut = candidate.content?.parts?.[0]?.text || "{}";
+
+    let parsed;
+    try {
+      parsed = JSON.parse(textOut);
+    } catch (parseErr) {
+      return res.status(502).json({
+        error: "Gemini ka response valid JSON nahi tha",
+        details: textOut,
+      });
+    }
 
     return res.status(200).json({
       title: parsed.title || "",
